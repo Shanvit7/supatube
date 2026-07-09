@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 40" fill="none" role="img" aria-label="SupaTube">
+  <title>SupaTube</title>
+
+  <!--
+    Mark concept: three stacked memory records — video frames / history entries.
+    Full white → 60% → 30%: present fading into past. Not a play button.
+    Rounded rect at brand blue (oklch 0.50 0.28 262 ≈ #0035FF).
+  -->
+
+  <!-- Background -->
+  <rect width="40" height="40" rx="9" fill="#0035FF"/>
+
+  <!-- Memory records — three bars, opacity fade downward -->
+  <rect x="9"  y="9"    width="22" height="5" rx="1.5" fill="white"/>
+  <rect x="9"  y="17.5" width="22" height="5" rx="1.5" fill="white" opacity="0.55"/>
+  <rect x="9"  y="26"   width="22" height="5" rx="1.5" fill="white" opacity="0.25"/>
+
+  <!-- Wordmark -->
+  <text
+    x="52"
+    y="26.5"
+    font-family="'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+    font-size="19.5"
+    font-weight="600"
+    letter-spacing="-0.3"
+    fill="#111111"
+  >SupaTube</text>
+</svg>

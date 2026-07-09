@@ -1,101 +1,144 @@
-import { classifyMemoryGate, isAiAvailable } from "~lib/ai-memory-gate"
-import { STORE_THRESHOLD, scorePayload } from "~lib/heuristic-gate"
+import { runGate as runHeuristicGate } from "~lib/heuristic-gate"
 import { createLogger } from "~lib/logger"
-import type { CapturePayload, ExtensionMessage, VideoPayload } from "~lib/types"
-import { MemoryError, memoryService } from "~services/memory.service"
+import {
+  isMemoryGateAvailable,
+  resetMemoryGateCache,
+  runGate as runMemoryGate,
+} from "~lib/memory-gate"
+import type { ExtensionMessage, GateResult } from "~lib/types"
+import { captureSchema } from "~schemas/capture.schema"
+import { SETTINGS_DEFAULTS } from "~schemas/settings.schema"
+import { probeSupermemory } from "~services/http"
+import { memoryService } from "~services/memory.service"
 
 const logger = createLogger("background")
+
+// ── Gate availability cache ───────────────────────────────────────────────────
+// Reset on startup/install so we re-probe fresh each SW lifetime.
+
+const resetGateCache = () => {
+  resetMemoryGateCache()
+}
+
+chrome.runtime.onStartup.addListener(resetGateCache)
+chrome.runtime.onInstalled.addListener(() => {
+  resetGateCache()
+  void runOnboarding()
+})
+
+// ── Onboarding handshake ──────────────────────────────────────────────────────
+// Probe localhost:6767. Supermemory Local does not expose a /handshake endpoint
+// as of the current SDK version — user must paste API key in Options if needed.
+
+const runOnboarding = async () => {
+  const reachable = await probeSupermemory()
+  if (!reachable) {
+    logger.warn({}, "Supermemory not reachable — user must configure API key")
+  } else {
+    logger.info({}, "Supermemory reachable")
+  }
+}
 
 // ── Message listener ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
-  if (message.type !== "VIDEO_CAPTURED") return
-  handleCapture(message.payload)
+  if (message.type !== "CAPTURE") return
+  void handleCapture(message.payload)
 })
 
 // ── Capture handler ───────────────────────────────────────────────────────────
-// Gate order: AI first → heuristic fallback (only when AI is unavailable/throws).
-// VideoPayload is rich context used only for local gate evaluation — never sent
-// to the backend. Backend derives metadata from videoId via yt-dlp.
 
-const handleCapture = async (payload: VideoPayload): Promise<void> => {
-  if (!payload.videoId) {
-    logger.warn({}, "no videoId — skipping")
+const handleCapture = async (rawPayload: unknown): Promise<void> => {
+  // Validate
+  const parsed = captureSchema.safeParse(rawPayload)
+  if (!parsed.success) {
+    logger.warn({ err: parsed.error.flatten() }, "invalid capture payload")
     return
   }
+  const payload = parsed.data
 
   logger.info(
     { videoId: payload.videoId, watchPercent: payload.watchPercent },
     `gate check: "${payload.title}"`
   )
 
-  // ── [1] AI gate — primary path ─────────────────────────────────────────────
-  const aiReady = await isAiAvailable()
+  // Clear badge before gate runs
+  chrome.action.setBadgeText({ text: "" })
+
+  // Load threshold from storage
+  const {
+    gateThreshold = SETTINGS_DEFAULTS.gateThreshold,
+    containerTag = SETTINGS_DEFAULTS.containerTag,
+  } = await chrome.storage.local.get({
+    gateThreshold: SETTINGS_DEFAULTS.gateThreshold,
+    containerTag: SETTINGS_DEFAULTS.containerTag,
+  })
+
+  // ── Gate dispatch ─────────────────────────────────────────────────────────
+  let result: GateResult
+
+  const aiReady = await isMemoryGateAvailable()
 
   if (aiReady) {
     try {
-      const result = await classifyMemoryGate(payload)
-
-      if (!result.store) {
-        logger.debug({ title: payload.title, confidence: result.confidence }, "AI gate: drop")
-        return
-      }
-
-      logger.info({ title: payload.title, confidence: result.confidence }, "AI gate: store")
-      await persist(payload, { gate: "ai", confidence: result.confidence })
-      return
+      result = await runMemoryGate(payload)
+      logger.info({ score: result.score, reason: result.reason }, "Memory Gate result")
     } catch (err) {
-      logger.error({ err }, "Gemini Nano failed — falling back to heuristic gate")
+      logger.error({ err }, "Memory Gate threw — falling back to heuristic")
+      result = await runHeuristicGate(payload)
     }
   } else {
-    logger.warn({}, "Gemini Nano unavailable — heuristic gate active")
+    logger.warn({}, "Memory Gate unavailable — heuristic gate active")
+    result = await runHeuristicGate(payload)
   }
 
-  // ── [2] Heuristic gate — fallback only ────────────────────────────────────
-  const score = scorePayload(payload)
+  logger.info(
+    { videoId: payload.videoId, score: result.score, source: result.source, gateThreshold },
+    `gate: ${result.source}`
+  )
 
-  if (score < STORE_THRESHOLD) {
-    logger.debug({ title: payload.title, score }, "heuristic gate: drop")
+  // ── Threshold check ───────────────────────────────────────────────────────
+  if (result.score < (gateThreshold as number)) {
+    logger.debug({ title: payload.title, score: result.score }, "gate: drop")
+    setBadge("–", "#ef4444")
     return
   }
 
-  logger.info({ title: payload.title, score }, "heuristic gate: store")
-  await persist(payload, { gate: "heuristic", gateScore: score })
-}
-
-// ── Persist ───────────────────────────────────────────────────────────────────
-// Constructs the lean CapturePayload from gate evaluation context.
-// Only watch behaviour + gate metadata leave the device — backend fetches
-// title / channel / description / duration / transcript via yt-dlp.
-
-const persist = async (
-  payload: VideoPayload,
-  gate: Pick<CapturePayload, "gate" | "confidence" | "gateScore">
-): Promise<void> => {
-  const capture: CapturePayload = {
-    videoId: payload.videoId as string, // null guard already done in handleCapture
-    playedSeconds: payload.playedSeconds,
-    watchPercent: payload.watchPercent,
-    capturedAt: new Date().toISOString(),
-    ...gate,
-  }
-
+  // ── Persist via SDK ───────────────────────────────────────────────────────
   try {
-    await memoryService.capture(capture)
-  } catch (error) {
-    if (error instanceof MemoryError) {
-      await queueLocally(capture)
-      return
-    }
-    logger.error({ err: error }, "unexpected error during capture")
+    await memoryService.add(payload, {
+      valueScore: result.score,
+      gateReason: result.reason,
+      gateSource: result.source,
+      watchedAt: new Date().toISOString(),
+      containerTag: containerTag as string,
+    })
+
+    setBadge("✓", "#22c55e")
+    await updateCaptureStats()
+    logger.info({ videoId: payload.videoId, source: result.source }, "memory saved")
+  } catch (err) {
+    logger.error({ err, videoId: payload.videoId }, "SDK write failed")
+    setBadge("!", "#f59e0b")
   }
 }
 
-// ── Local queue ───────────────────────────────────────────────────────────────
+// ── Badge helpers ─────────────────────────────────────────────────────────────
 
-const queueLocally = async (capture: CapturePayload): Promise<void> => {
-  const { queue = [] } = await chrome.storage.local.get({ queue: [] as CapturePayload[] })
-  ;(queue as CapturePayload[]).push(capture)
-  await chrome.storage.local.set({ queue })
-  logger.info({ queueLength: (queue as CapturePayload[]).length }, "queued locally")
+const setBadge = (text: string, color: string) => {
+  chrome.action.setBadgeText({ text })
+  chrome.action.setBadgeBackgroundColor({ color })
+}
+
+// ── Capture stats (for popup display) ────────────────────────────────────────
+
+const updateCaptureStats = async () => {
+  const now = new Date()
+  const todayKey = `savedToday_${now.toISOString().slice(0, 10)}`
+  const { [todayKey]: count = 0 } = await chrome.storage.local.get({ [todayKey]: 0 })
+  await chrome.storage.local.set({
+    lastSavedAt: now.toISOString(),
+    [todayKey]: (count as number) + 1,
+    savedToday: (count as number) + 1,
+  })
 }

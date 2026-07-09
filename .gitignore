@@ -10,6 +10,9 @@ dist
 .plasmo
 *.tsbuildinfo
 
+# Next.js auto-generated — do not commit
+next-env.d.ts
+
 # Turbo
 .turbo
 
@@ -27,3 +30,5 @@ Thumbs.db
 .idea
 *.swp
 *.swo
+
+.supermemory

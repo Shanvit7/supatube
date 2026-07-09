@@ -1,35 +1,32 @@
-// ── Internal gate payload ────────────────────────────────────────────────────
-// Rich context used locally by the AI gate and heuristic scorer.
-// Never sent to the backend — backend derives everything it needs from videoId.
+// ── Re-export CapturePayload from schema (single source of truth) ─────────────
+// Do NOT define CapturePayload here — it lives in schemas/capture.schema.ts.
+export type { CapturePayload } from "~schemas/capture.schema"
 
-export interface VideoPayload {
-  videoId: string | null
-  title: string
-  channel: string
-  description: string
-  durationSeconds: number
-  playedSeconds: number // actual playback time, excludes seeking
-  watchPercent: number // 0–1
+// ── Gate result (internal to background.ts — never stored directly in SDK) ────
+// score is ALWAYS 0–1:
+//   Memory Gate  → parsed.confidence ?? 0.5
+//   Heuristic    → Math.max(0, Math.min(1, rawScore / 80))
+export interface GateResult {
+  score: number
+  reason: string
+  source: "memory-gate" | "heuristic-fallback"
 }
 
-// ── Backend capture payload ───────────────────────────────────────────────────
-// Lean. Only fields the backend cannot derive from videoId via yt-dlp.
-// title / channel / description / duration / transcript → backend fetches them.
-
-export interface CapturePayload {
-  videoId: string // guaranteed non-null before persist is called
-  playedSeconds: number
-  watchPercent: number
-  capturedAt: string // ISO string
-  gate: "ai" | "heuristic"
-  confidence?: number // AI confidence 0–1
-  gateScore?: number // heuristic scorer total
+// ── Extension messages ────────────────────────────────────────────────────────
+export type ExtensionMessage = {
+  type: "CAPTURE"
+  payload: import("~schemas/capture.schema").CapturePayload
 }
 
-export type ExtensionMessage = { type: "VIDEO_CAPTURED"; payload: VideoPayload }
-
-// Returned by classifyMemoryGate
+// ── Memory Gate classifier result (from Gemini Nano prompt) ──────────────────
 export interface MemoryGateResult {
   store: boolean
   confidence?: number
+  reason: string
+}
+
+// ── Stored capture stats (written by background.ts) ──────────────────────────
+export interface CaptureStats {
+  lastSavedAt?: string // ISO
+  savedToday?: number
 }

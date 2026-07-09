@@ -114,6 +114,8 @@ export const exampleEmailSchema = exampleSchema.shape.email;
 All server communication follows a strict three-layer pattern: **Service → Hook → Component**.
 Never call `fetch` directly inside a component or hook.
 
+> **🧩 Chrome Extension Exception (`apps/extension/`)** — TanStack Query is **not used** in the Plasmo extension. The data source is a local process (`localhost:6767`) with <50ms latency, so caching, background refetch, and deduplication provide no real benefit while adding ~47KB to the bundle. Use plain `useState`/`useEffect` hooks instead. The **Service layer still applies** — hooks call the service class, never the SDK or `fetch` directly.
+
 ### Layer 1 — Service (`src/services/<domain>.service.ts`)
 
 - ES6 class that owns the API calls for one domain.
@@ -199,9 +201,22 @@ export const useExampleMutation = () => {
 
 ---
 
+## 💅 Styling
+
+- **Tailwind CSS only** — no inline `style` attributes in JSX. Every style must be a Tailwind utility class or a named CSS class in `globals.css`.
+  - ❌ `<div style={{ background: 'red', fontSize: '12px' }}>` — never
+  - ✅ `<div className="bg-red-500 text-xs">` — always
+  - ✅ `<div className="bg-[oklch(0.38_0.12_27)]">` — arbitrary Tailwind values are fine
+  - This applies **everywhere**: components, layouts, panel mocks, illustrations, everything. No exceptions.
+- **No `px` units in Tailwind arbitrary values** — use `rem` (`[1rem]`), `em`, or standard Tailwind scale utilities (`mb-4`, `w-72`, `text-xs`).
+  - Bad: `className="mb-[16px]"`, `className="w-[280px]"`, `className="text-[12px]"`
+  - Good: `className="mb-4"`, `className="w-[17.5rem]"`, `className="text-xs"`
+
 ## 🚫 What Not To Do
 
 - ❌ **No direct commits** — always confirm with the user before committing
+- ❌ No inline `style` attributes in JSX — use Tailwind utility classes
+- ❌ No `px` units in Tailwind arbitrary values — use `rem`, `em`, or standard scale utilities
 - ❌ No `function` keyword declarations (use arrow functions or class methods)
 - ❌ No `var`
 - ❌ No `.js` extensions in import paths
