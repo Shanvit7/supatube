@@ -85,7 +85,7 @@ export const ComingSoon = () => {
             className="inline-flex items-center gap-[7px] font-mono text-[0.6875rem] text-fg no-underline transition-opacity hover:opacity-50"
           >
             <GithubIcon size={12} />
-            Follow on GitHub
+            Star on GitHub
           </a>
           <span aria-hidden className="font-mono text-[0.6875rem] text-border select-none">
             ·
