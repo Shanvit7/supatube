@@ -3,6 +3,8 @@ node_modules
 .pnpm-store
 
 # Build outputs
+.pi
+.personal
 .next
 out
 build

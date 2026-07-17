@@ -1,7 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" role="img" aria-label="SupaTube mark">
-  <title>SupaTube</title>
-  <rect width="40" height="40" rx="9" fill="#0035FF"/>
-  <rect x="9"  y="9"    width="22" height="5" rx="1.5" fill="white"/>
-  <rect x="9"  y="17.5" width="22" height="5" rx="1.5" fill="white" opacity="0.55"/>
-  <rect x="9"  y="26"   width="22" height="5" rx="1.5" fill="white" opacity="0.25"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" fill="none" role="img" aria-label="Poiesis">
+  <title>Poiesis</title>
+  <!-- Neo-brutal lift: hard offset shadow, no blur -->
+  <rect x="4" y="4" width="40" height="40" rx="8" fill="oklch(0.06 0 0)"/>
+  <!-- Main face -->
+  <rect x="0" y="0" width="40" height="40" rx="8" fill="oklch(0.55 0.19 9)"/>
+  <text
+    x="20"
+    y="30"
+    text-anchor="middle"
+    font-family="Oxanium, sans-serif"
+    font-size="26"
+    font-weight="800"
+    fill="oklch(0.98 0 0)"
+  >P</text>
 </svg>

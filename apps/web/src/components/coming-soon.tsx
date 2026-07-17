@@ -2,101 +2,97 @@
 
 import { GithubIcon } from "@/components/brand-icons"
 import { GITHUB_URL } from "@/lib/constants"
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 
-// Staggered fade-up for text elements
-const textItem = {
-  hidden: { opacity: 0, y: 14 },
-  show: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      type: "tween" as const,
-      duration: 0.65,
-      delay: i * 0.09,
-      ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
-    },
-  }),
-}
+export const ComingSoon = () => {
+  const reduce = useReducedMotion()
 
-// Separate entrance for the mark — scale in from slightly small
-const markVariant = {
-  hidden: { opacity: 0, scale: 0.82 },
-  show: {
-    opacity: 1,
-    scale: 1,
-    transition: {
-      type: "spring" as const,
-      stiffness: 260,
-      damping: 22,
-      delay: 0.04,
-    },
-  },
-}
+  return (
+    <main className="relative flex min-h-svh flex-col items-center justify-center px-6 py-20">
+      {/* Atmospheric bleed — primary hue softly radiates into the dark bg */}
+      <div aria-hidden className="bg-glow pointer-events-none absolute inset-0" />
 
-export const ComingSoon = () => (
-  <main className="flex min-h-svh flex-col items-center justify-center px-6">
-    <div className="flex w-full max-w-[34rem] flex-col items-center text-center">
-      {/* Mark — the visual anchor, not a nav element */}
-      <motion.div variants={markVariant} initial="hidden" animate="show">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 40 40"
-          fill="none"
-          aria-hidden="true"
-          className="h-[4.5rem] w-[4.5rem]"
-        >
-          <rect width="40" height="40" rx="9" style={{ fill: "var(--color-primary)" }} />
-          <rect x="9" y="9" width="22" height="5" rx="1.5" fill="white" />
-          <rect x="9" y="17.5" width="22" height="5" rx="1.5" fill="white" opacity="0.55" />
-          <rect x="9" y="26" width="22" height="5" rx="1.5" fill="white" opacity="0.25" />
-        </svg>
-      </motion.div>
-
-      {/* Headline */}
-      <motion.h1
-        custom={0}
-        variants={textItem}
-        initial="hidden"
-        animate="show"
-        className="mt-8 text-[clamp(2.375rem,5.5vw,3.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg text-balance"
-      >
-        Turn YouTube into a knowledge base.
-      </motion.h1>
-
-      {/* Sub */}
-      <motion.p
-        custom={1}
-        variants={textItem}
-        initial="hidden"
-        animate="show"
-        className="mt-5 text-[1rem] leading-[1.72] text-fg-2 text-pretty"
-      >
-        Saves what you actually watched. Surfaces what to explore next based on your real taste.
-        Search everything in plain English. Fully local — no cloud, no account.
-      </motion.p>
-
-      {/* Trust */}
       <motion.div
-        custom={2}
-        variants={textItem}
-        initial="hidden"
-        animate="show"
-        className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
+        initial={{ opacity: 0, y: reduce ? 0 : 22 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+        className="relative flex w-full max-w-[40rem] flex-col"
       >
-        <span className="font-mono text-[0.6875rem] text-fg-3">
-          Free forever · Fully local · Open source
-        </span>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-mono text-[0.6875rem] text-fg-3 no-underline transition-colors hover:text-fg-2"
-        >
-          <GithubIcon size={12} />
-          Follow on GitHub
-        </a>
+        {/* Status chip — devs read comments, not badges */}
+        <div className="flex items-center gap-2.5 mb-9">
+          <span aria-hidden className="block size-[5px] rounded-full bg-primary shrink-0" />
+          <span className="font-mono text-[0.6875rem] text-muted tracking-wide">
+            {"// work in progress · open source"}
+          </span>
+        </div>
+
+        {/* Headline */}
+        <h1 className="text-[clamp(2.75rem,7vw,5rem)] font-extrabold leading-[0.94] tracking-[-0.03em] text-fg">
+          Point it at a video.
+          <br />
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{
+              duration: 0.6,
+              delay: reduce ? 0 : 0.32,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            className="text-primary"
+          >
+            Build it yourself.
+          </motion.span>
+        </h1>
+
+        {/* Sub */}
+        <p className="mt-7 text-[1rem] leading-[1.72] text-fg/75 max-w-[44ch] text-pretty">
+          <span className="text-fg">Poiesis</span> is your AI coding tutor for YouTube tutorials. It
+          reads the video deeply, asks the right questions, and guides you through building the
+          project — chapter by chapter.
+        </p>
+
+        {/* 3-step flow */}
+        <ol className="mt-8 flex flex-col gap-3">
+          {(
+            [
+              ["Ingest", "chapters, stack, concepts, prereqs"],
+              ["Tutor", "asks questions, recommends patterns, corrects assumptions"],
+              ["Lab", "you write the code; the agent tutors you through it"],
+            ] as const
+          ).map(([step, desc], i) => (
+            <li key={step} className="flex items-baseline gap-3">
+              <span className="font-mono text-[0.6875rem] text-muted select-none tabular-nums w-4 shrink-0">
+                {i + 1}.
+              </span>
+              <span className="font-mono text-[0.6875rem]">
+                <span className="text-fg">{step}</span>
+                <span className="text-border mx-2">—</span>
+                <span className="text-muted">{desc}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        {/* Rule */}
+        <div aria-hidden className="mt-10 h-px w-10 bg-border" />
+
+        {/* Links row */}
+        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-[7px] font-mono text-[0.6875rem] text-fg no-underline transition-opacity hover:opacity-50"
+          >
+            <GithubIcon size={12} />
+            Follow on GitHub
+          </a>
+          <span aria-hidden className="font-mono text-[0.6875rem] text-border select-none">
+            ·
+          </span>
+          <span className="font-mono text-[0.6875rem] text-muted">shipping soon</span>
+        </div>
       </motion.div>
-    </div>
-  </main>
-)
+    </main>
+  )
+}

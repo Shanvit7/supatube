@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" role="img" aria-label="SupaTube mark">
-  <title>SupaTube</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" role="img" aria-label="Poiesis">
+  <title>Poiesis</title>
   <rect width="40" height="40" rx="9" fill="#0035FF"/>
-  <rect x="9"  y="9"    width="22" height="5" rx="1.5" fill="white"/>
-  <rect x="9"  y="17.5" width="22" height="5" rx="1.5" fill="white" opacity="0.55"/>
-  <rect x="9"  y="26"   width="22" height="5" rx="1.5" fill="white" opacity="0.25"/>
+  <text
+    x="20" y="25"
+    text-anchor="middle"
+    font-family="'Geist', 'Syne Mono', ui-monospace, monospace"
+    font-size="14"
+    font-weight="600"
+    letter-spacing="0.5"
+    fill="white"
+  >PoI</text>
 </svg>
