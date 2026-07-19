@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/web/src/app/icon.svg" width="72" alt="Poiesis logo" />
+  <img src="apps/web/src/app/logo.svg" width="72" alt="Poiesis logo" />
   <h1 align="center">Poiesis</h1>
   <p align="center">
     <a href="https://github.com/Shanvit7/poiesis/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-C62C5A?style=flat-square" alt="License: MIT" /></a>

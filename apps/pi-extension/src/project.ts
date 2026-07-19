@@ -218,10 +218,8 @@ dist/
 .poiesis
 `
 
-const POIESIS_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" fill="none" height="16" width="16" style="vertical-align:middle"><rect x="4" y="4" width="40" height="40" rx="8" fill="#0f0f0f"/><rect width="40" height="40" rx="8" fill="oklch(0.55 0.19 9)"/><text x="20" y="30" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="800" fill="#fafafa">P</text></svg>`
-
 const buildReadme = (name: string, url: string, analysis: VideoAnalysis): string =>
-  `# ${name}\n\n${analysis.summary}\n\n---\n\n<sub>${POIESIS_LOGO} Built with <a href="https://shanvit7.github.io/poiesis/">Poiesis</a> · <a href="${url}">Source video</a></sub>\n`
+  `# ${name}\n\n${analysis.summary}\n\n---\n\n<sub>Made with help of <a href="https://shanvit7.github.io/poiesis/">Poiesis</a> watching <a href="${url}">${url}</a></sub>\n`
 
 const scaffoldChapters = (
   chaptersDir: string,
