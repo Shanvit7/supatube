@@ -11,6 +11,19 @@ export const slugify = (s: string): string =>
 
 export const expandHome = (p: string): string => p.replace(/^~/, process.env.HOME ?? "")
 
+/**
+ * Scan $HOME for directories that actually exist — used to build ask_user_question options
+ * for the project location picker. Returns at most 4 (the tool's max per question).
+ */
+export const scanHomeDirs = (): { label: string; path: string }[] => {
+  const home = process.env.HOME ?? ""
+  const candidates = ["Desktop", "projects", "dev", "code", "Documents", "workspace", "src"]
+  return candidates
+    .filter((name) => existsSync(`${home}/${name}`))
+    .slice(0, 4)
+    .map((name) => ({ label: name, path: `${home}/${name}` }))
+}
+
 export const readJson = <T>(path: string): T => {
   const full = expandHome(path)
   return JSON.parse(readFileSync(full, "utf8")) as T

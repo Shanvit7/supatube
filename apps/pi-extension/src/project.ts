@@ -1,0 +1,243 @@
+import { mkdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
+/**
+ * Post-onboarding project flow.
+ *
+ * 1. ctx.ui.input — YouTube URL
+ * 2. ctx.ui.input — project name (defaults to YT video title)
+ * 3. Scaffold {cwd}/{name}/chapters/
+ * 4. Gemini (JSON mode) → chapter-index.md + summary.md + chapter-N.md per chapter
+ */
+import { Type as GType, GoogleGenAI } from "@google/genai"
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Chapter {
+  title: string
+  concepts: string[]
+  duration: string
+  notes: string
+  keyTakeaway: string
+}
+
+interface VideoAnalysis {
+  summary: string
+  chapters: Chapter[]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const toFolder = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50)
+
+const YT_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/
+
+const ytTitle = async (url: string): Promise<string> => {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+    )
+    const data = (await res.json()) as { title?: string }
+    return data.title ?? "project"
+  } catch {
+    return "project"
+  }
+}
+
+// ── Gemini analysis ───────────────────────────────────────────────────────────
+
+const analyzeVideo = async (url: string, name: string): Promise<VideoAnalysis> => {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set")
+
+  const ai = new GoogleGenAI({ apiKey })
+
+  const result = await ai.models.generateContent({
+    model: "gemini-3.5-flash",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `Analyze this YouTube tutorial and return structured JSON.
+URL: ${url}
+Project name: "${name}"
+
+Return a JSON object matching the schema exactly. Be specific to the actual video content — no filler.
+
+Fields:
+- summary: 2–3 sentence overview of what the video covers and who it's for
+- chapters: array of chapters, each with:
+  - title: short chapter title (no number prefix)
+  - concepts: array of 2–5 key topics covered
+  - duration: estimated time range (e.g. "0:00–8:30")
+  - notes: one sentence on what the viewer builds or learns
+  - keyTakeaway: single most important insight from this chapter`,
+          },
+        ],
+      },
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: GType.OBJECT,
+        properties: {
+          summary: { type: GType.STRING },
+          chapters: {
+            type: GType.ARRAY,
+            items: {
+              type: GType.OBJECT,
+              properties: {
+                title: { type: GType.STRING },
+                concepts: { type: GType.ARRAY, items: { type: GType.STRING } },
+                duration: { type: GType.STRING },
+                notes: { type: GType.STRING },
+                keyTakeaway: { type: GType.STRING },
+              },
+              required: ["title", "concepts", "duration", "notes", "keyTakeaway"],
+            },
+          },
+        },
+        required: ["summary", "chapters"],
+      },
+    },
+  })
+
+  return JSON.parse(result.text ?? "{}") as VideoAnalysis
+}
+
+// ── File builders ─────────────────────────────────────────────────────────────
+
+const buildSummary = (
+  name: string,
+  url: string,
+  analysis: VideoAnalysis
+): string => `# ${name} — Summary
+
+**Source**: ${url}
+
+${analysis.summary}
+
+## What You'll Learn
+
+${analysis.chapters.map((ch, i) => `- **Chapter ${i + 1}** — ${ch.title}: ${ch.keyTakeaway}`).join("\n")}
+
+---
+
+← [[chapter-index]]
+`
+
+const buildIndex = (name: string, url: string, analysis: VideoAnalysis): string => {
+  const rows = analysis.chapters
+    .map(
+      (ch, i) =>
+        `| [[chapter-${i + 1}\\|Chapter ${i + 1}]] | ${ch.title} | ${ch.duration} | ${ch.concepts.join(", ")} |`
+    )
+    .join("\n")
+
+  return `# ${name} — Chapter Index
+
+**Source**: ${url}
+
+> ${analysis.summary}
+
+[[summary|→ Full Summary]]
+
+## Chapters
+
+| # | Title | Duration | Key Concepts |
+|---|-------|----------|--------------|
+${rows}
+
+---
+
+*${analysis.chapters.length} chapters · generated by poiesis*
+`
+}
+
+const buildChapter = (ch: Chapter, n: number, total: number): string => {
+  const prev = n > 1 ? `[[chapter-${n - 1}|← Chapter ${n - 1}]]` : "[[chapter-index|← Index]]"
+  const next = n < total ? `[[chapter-${n + 1}|Chapter ${n + 1} →]]` : "[[chapter-index|→ Index]]"
+
+  return `# Chapter ${n} — ${ch.title}
+
+**Concepts**: ${ch.concepts.join(", ")}
+**Duration**: ${ch.duration}
+
+## What You Learn
+
+${ch.notes}
+
+## Key Takeaway
+
+> ${ch.keyTakeaway}
+
+---
+
+${prev} · ${next}
+`
+}
+
+// ── Scaffold ──────────────────────────────────────────────────────────────────
+
+const scaffoldChapters = (
+  dir: string,
+  name: string,
+  url: string,
+  analysis: VideoAnalysis
+): void => {
+  const write = (filename: string, content: string): void =>
+    writeFileSync(join(dir, filename), content, "utf8")
+
+  write("summary.md", buildSummary(name, url, analysis))
+  write("chapter-index.md", buildIndex(name, url, analysis))
+
+  for (let i = 0; i < analysis.chapters.length; i++) {
+    write(
+      `chapter-${i + 1}.md`,
+      buildChapter(analysis.chapters[i], i + 1, analysis.chapters.length)
+    )
+  }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+export const runProject = async (ctx: ExtensionCommandContext): Promise<void> => {
+  // 1. YT URL
+  const url = (await ctx.ui.input("Paste a YouTube URL")) ?? ""
+  if (!YT_RE.test(url)) {
+    ctx.ui.notify("Not a valid YouTube URL — try again.", "error")
+    return
+  }
+
+  // 2. Project name
+  const defaultTitle = await ytTitle(url)
+  const input =
+    (await ctx.ui.input(`Project name — press Enter to use "${defaultTitle}"`, defaultTitle)) ||
+    defaultTitle
+  const name = toFolder(input) || "project"
+
+  // 3. Scaffold directory
+  const chaptersDir = join(ctx.cwd, name, "chapters")
+  mkdirSync(chaptersDir, { recursive: true })
+
+  // 4. Analyze + write files
+  ctx.ui.setStatus("poiesis", " Analyzing video with Gemini…")
+  try {
+    const analysis = await analyzeVideo(url, name)
+    scaffoldChapters(chaptersDir, name, url, analysis)
+    ctx.ui.setStatus("poiesis", undefined)
+    ctx.ui.notify(
+      `✓ ${name}/chapters/ ready — ${analysis.chapters.length} chapters + index + summary`,
+      "info"
+    )
+  } catch (err) {
+    ctx.ui.setStatus("poiesis", undefined)
+    ctx.ui.notify(`Gemini error: ${String(err)}`, "error")
+  }
+}

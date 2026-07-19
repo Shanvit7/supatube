@@ -1,12 +1,33 @@
 {
-  "name": "@poiesis/pi-extension",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@shanvit7/poiesis",
+  "version": "0.1.0",
+  "description": "Pi extension — YouTube tutorial tutor. Ingest any coding video, grill the user, scaffold the project, and generate chapter-by-chapter lab guides.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-skill",
+    "poiesis",
+    "tutor",
+    "youtube",
+    "coding-tutorial"
+  ],
+  "author": "shanvit7",
+  "license": "MIT",
   "type": "module",
   "main": "./index.ts",
-  "dependencies": {
-    "@google/genai": "^1.0.0"
+  "files": ["index.ts", "src", "skills", "README.md"],
+  "publishConfig": {
+    "access": "public"
   },
+  "pi": {
+    "extensions": ["./index.ts", "node_modules/@juicesharp/rpiv-ask-user-question/index.ts"],
+    "skills": ["./skills"]
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@juicesharp/rpiv-ask-user-question": "*"
+  },
+  "bundledDependencies": ["@juicesharp/rpiv-ask-user-question"],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
