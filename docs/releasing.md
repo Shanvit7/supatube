@@ -1,120 +1,125 @@
 # Releasing
 
-Releases of `@shanvit7/poiesis` are **fully automated**. Merging to `main`
-with changes inside `apps/pi-extension/` triggers the pipeline — no manual
-`npm publish`, no hand-edited changelogs.
+Releases of `@shanvit7/poiesis` use
+[release-please](https://github.com/googleapis/release-please) — the same
+tool used by Google, Stripe, and Firebase. **No local commands are needed to
+cut a release.** Publishing is fully automated and gated behind an explicit
+human decision.
 
 ---
 
-## What triggers a release
-
-The workflow watches one path:
+## How it works
 
 ```
-apps/pi-extension/**
+merge PR to main
+      │
+      ▼
+release-please inspects conventional commits
+      │
+      ├─ opens / updates a "Release PR"
+      │   (bumped package.json + CHANGELOG.md preview)
+      │
+      └─ nothing publishes yet ← the gate
+              │
+              ▼ (maintainer merges the Release PR when ready)
+         publish job runs
+              │
+              ├─ npm publish --provenance
+              └─ GitHub Release created with changelog
 ```
 
-A push (or merged PR) to `main` that touches **any file inside that path**
-kicks off the release job. Changes outside it (e.g. `apps/web/`) are ignored.
+Two phases, one explicit decision point.
 
 ---
 
-## What the pipeline does
+## Phase 1 — Merging feature work
 
-1. **Bump patch version** — `package.json` version is incremented automatically
-   (`0.0.1` → `0.0.2`). No human touches the version field.
+Merge PRs to `main` as normal. After each merge, `release-please` reads
+the new commits and updates its open Release PR (or creates one if it doesn't
+exist yet). Multiple PRs can land before any release — they all accumulate in
+the same Release PR.
 
-2. **Generate changelog** — [`git-cliff`](https://git-cliff.org) reads all
-   unreleased commits scoped to `apps/pi-extension/**` and produces a
-   formatted entry grouped by type.
+The Release PR shows exactly what the next version will be and what the
+changelog entry will contain. No publish happens.
 
-3. **Commit & tag** — The version bump and updated `CHANGELOG.md` are committed
-   with `[skip ci]` (so the commit doesn't re-trigger the workflow) and tagged
-   `vX.Y.Z`.
+---
 
-4. **Publish to npm** — Package is published to the npm registry with
-   provenance attestation (links the package to the exact commit + workflow run).
+## Phase 2 — Cutting a release
 
-5. **Create GitHub Release** — A release is created on GitHub with the
-   generated changelog as the body.
+When the maintainer is happy with what's accumulated, they **merge the Release
+PR**. That's the only required action. CI then:
+
+1. Tags the commit (`vX.Y.Z`)
+2. Publishes to npm with provenance attestation
+3. Creates a GitHub Release with the generated changelog
 
 ---
 
 ## Versioning
 
-This package follows [Semantic Versioning](https://semver.org).
+`release-please` determines the version bump from commit types:
 
-| Change | Version bump | Who does it |
-|--------|-------------|-------------|
-| Patch (bug fix, chore, docs) | `0.0.1` → `0.0.2` | Automated on every merge |
-| Minor (new feature, non-breaking) | `0.0.2` → `0.1.0` | Run `npm version minor` locally, push |
-| Major (breaking change) | `0.1.0` → `1.0.0` | Run `npm version major` locally, push |
+| Commit | Bump |
+|--------|------|
+| `fix:`, `perf:`, `chore:` etc. | patch (`0.1.0` → `0.1.1`) |
+| `feat:` | minor (`0.1.0` → `0.2.0`) |
+| `feat!:` or `BREAKING CHANGE:` footer | major (`0.1.0` → `1.0.0`) |
 
-> For minor/major bumps: edit `package.json` version manually or run
-> `npm version minor/major --no-git-tag-version` in `apps/pi-extension/`,
-> commit it, and push. The CI pipeline will pick it up as-is and skip the
-> patch bump (it only bumps patch when no version change is already present).
+> **Pre-1.0 note:** `bump-patch-for-minor-pre-major` is enabled, so `feat:`
+> commits bump the patch while the major version is `0`. This prevents
+> jumping to `0.2.0` for every small feature during early development.
+> Remove this setting in `release-please-config.json` once the package
+> reaches `1.0.0`.
 
 ---
 
 ## Commit message conventions
 
-The changelog is generated from commit messages. Use the
-[Conventional Commits](https://www.conventionalcommits.org) format:
+Use [Conventional Commits](https://www.conventionalcommits.org):
 
 ```
 <type>(<optional scope>): <short description>
 ```
 
-| Type | Shows up in changelog as |
-|------|--------------------------|
+| Type | Changelog section |
+|------|-------------------|
 | `feat` | Features |
 | `fix` | Bug Fixes |
-| `perf` | Performance |
-| `refactor` | Refactoring |
+| `perf` | Performance Improvements |
+| `revert` | Reverts |
 | `docs` | Documentation |
-| `test` | Testing |
-| `chore` | Chores |
+| `refactor` | Code Refactoring |
+| `test` | Tests |
+| `build` / `chore` | — (hidden from changelog) |
 
-Commits that don't match any type are filtered out of the changelog.
+Commits that don't follow the format are ignored by release-please.
 
-**Breaking changes** — append `!` after the type or add a
-`BREAKING CHANGE:` footer:
-
+**Breaking changes:**
 ```
-feat!: drop support for Node 18
-```
+feat!: drop Node 18 support
 
-This renders a ⚠️ BREAKING marker next to the entry.
+BREAKING CHANGE: minimum Node version is now 20.
+```
 
 ---
 
-## Changelog
+## Configuration files
 
-[`CHANGELOG.md`](../apps/pi-extension/CHANGELOG.md) lives inside the
-package directory and is auto-prepended on every release. Do not edit it by
-hand — it will be overwritten.
+| File | Purpose |
+|------|---------|
+| [`release-please-config.json`](../release-please-config.json) | Package path, release type, changelog settings |
+| [`.release-please-manifest.json`](../.release-please-manifest.json) | Tracks current released version — do not edit by hand |
 
 ---
 
 ## Required secrets
 
-One secret must be set in the GitHub repository
-(**Settings → Secrets and variables → Actions**):
-
 | Secret | What it is |
 |--------|-----------|
-| `NPM_TOKEN` | npm Automation token from [npmjs.com/settings/~/tokens](https://www.npmjs.com/settings/~/tokens) |
+| `NPM_TOKEN` | npm Automation token — [npmjs.com/settings/~/tokens](https://www.npmjs.com/settings/~/tokens) |
 
-`GITHUB_TOKEN` is provided automatically by GitHub Actions — nothing to
-configure.
-
----
-
-## Running a release manually
-
-The workflow supports manual dispatch. Go to
-**GitHub → Actions → Publish pi-extension → Run workflow**.
+Set it in **GitHub → Settings → Secrets and variables → Actions**.
+`GITHUB_TOKEN` is provided automatically.
 
 ---
 

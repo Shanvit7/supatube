@@ -1,22 +1,36 @@
-name: Publish pi-extension
+name: Release pi-extension
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'apps/pi-extension/**'
-  workflow_dispatch:  # manual trigger from GitHub UI → Actions tab
-
-concurrency:
-  group: publish-extension
-  cancel-in-progress: false  # never cancel a publish in flight
 
 permissions:
-  contents: write  # push version bump + tag + CHANGELOG.md
-  id-token: write  # npm provenance
+  contents: write       # create tags, push changelog
+  pull-requests: write  # open/update the Release PR
+  id-token: write       # npm provenance
 
 jobs:
+  # ── 1. Maintain the Release PR ─────────────────────────────────────────────
+  # On every push to main, release-please inspects conventional commits and
+  # updates (or creates) a "chore: release vX.Y.Z" PR with a bumped
+  # package.json and CHANGELOG.md. Nothing publishes yet.
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.rp.outputs.releases_created }}
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # ── 2. Publish — only when the Release PR is merged ────────────────────────
+  # release-please merges its own PR with [skip ci] absent, so this job runs
+  # exactly once per intentional release decision.
   publish:
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,9 +38,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # git-cliff needs full history
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
 
@@ -37,55 +48,7 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # ── 1. Bump version ────────────────────────────────────────────────────
-      - name: Bump patch version
-        id: version
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          NEW_VERSION=$(npm version patch --no-git-tag-version | tr -d 'v')
-          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      # ── 2. Generate changelog (scoped to this package's path) ───────────────
-      - name: Generate changelog
-        id: cliff
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: apps/pi-extension/cliff.toml
-          args: >-
-            --include-path "apps/pi-extension/**"
-            --unreleased
-            --tag "v${{ steps.version.outputs.new }}"
-            --strip header
-
-      # ── 3. Prepend new entry to CHANGELOG.md ───────────────────────────────
-      - name: Update CHANGELOG.md
-        run: |
-          ENTRY="${{ steps.cliff.outputs.changelog }}"
-          if [ -f CHANGELOG.md ]; then
-            printf '%s\n\n%s' "$ENTRY" "$(cat CHANGELOG.md)" > CHANGELOG.md
-          else
-            printf '%s\n' "$ENTRY" > CHANGELOG.md
-          fi
-
-      # ── 4. Commit, tag, push ───────────────────────────────────────────────
-      - name: Commit & tag
-        run: |
-          git add package.json CHANGELOG.md
-          git commit -m "chore(release): v${{ steps.version.outputs.new }} [skip ci]"
-          git tag "v${{ steps.version.outputs.new }}"
-          git push origin main --follow-tags
-
-      # ── 5. Publish to npm ─────────────────────────────────────────────────
       - name: Publish to npm
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      # ── 6. Create GitHub Release with changelog as body ────────────────────
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.new }}
-          name: v${{ steps.version.outputs.new }}
-          body: ${{ steps.cliff.outputs.changelog }}
