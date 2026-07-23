@@ -40,7 +40,7 @@ export interface Config {
 
 // ── Chapter step state ────────────────────────────────────────────────────────
 
-export type ChapterStep = "prereq" | "theory" | "plan" | "write-tests" | "implement"
+export type ChapterStep = "classify" | "prereq" | "theory" | "plan" | "write-tests" | "implement"
 
 export interface ChapterState {
   step: ChapterStep

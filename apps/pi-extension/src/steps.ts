@@ -17,6 +17,9 @@ const render = (tmpl: string, vars: Record<string, string>): string =>
 const load = (name: string, vars: Record<string, string> = {}): string =>
   render(readFileSync(join(PROMPTS_DIR, `${name}.md`), "utf8").trim(), vars)
 
+export const classifyPrompt = (chapterNum: number): string =>
+  load("classify", { chapterNum: String(chapterNum) })
+
 export const prereqPrompt = (profileContext: string): string => load("prereq", { profileContext })
 
 export const theoryPrompt = (prereqResult: "familiar" | "primed", chapterNum: number): string =>
@@ -35,6 +38,11 @@ export const implementPrompt = (testsFile: string, chapterNum: number): string =
 
 // ponytail: self-check — no LLM, just verify templates load and vars substitute
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const c = classifyPrompt(4)
+  console.assert(c.includes("Chapter 4"), "classifyPrompt missing chapterNum")
+  console.assert(c.includes("poiesis_chapter_classify"), "classifyPrompt missing tool call")
+  console.assert(!c.includes("{{"), "classifyPrompt has unresolved vars")
+
   const p = prereqPrompt("Stack: TypeScript\n  - hono-api: REST API")
   console.assert(p.includes("FAMILIAR"), "prereqPrompt missing FAMILIAR path")
   console.assert(p.includes("UNFAMILIAR"), "prereqPrompt missing UNFAMILIAR path")

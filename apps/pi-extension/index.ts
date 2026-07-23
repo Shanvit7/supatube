@@ -18,6 +18,7 @@ import { runProject } from "./src/project.ts"
 import {
   implementPrompt,
   planPrompt,
+  prereqPrompt,
   theoryPrompt as theoryStepPrompt,
   writeTestsPrompt,
 } from "./src/steps.ts"
@@ -288,6 +289,44 @@ const extension = (pi: ExtensionAPI): void => {
   })
 
   // ── Tool: poiesis_prereq_done ──────────────────────────────────────────────
+  // ── Tool: poiesis_chapter_classify ──────────────────────────────────
+  // pi reads the chapter markdown (already in its system context via
+  // before_agent_start) and decides code vs theory. No external LLM call.
+  pi.registerTool({
+    name: "poiesis_chapter_classify",
+    label: "Poiesis: Classify Chapter",
+    description:
+      "Call FIRST in a fresh chapter session. Reads the chapter markdown from your " +
+      "system context and decides code vs theory. Routes to the correct next step.",
+    parameters: Type.Object({
+      kind: Type.Union([Type.Literal("code"), Type.Literal("theory")], {
+        description:
+          '"code" = student will write/run code; "theory" = purely conceptual. Mixed → code.',
+      }),
+    }),
+    async execute(_id, { kind }, _signal, _onUpdate, _ctx) {
+      if (!_projectDir)
+        return { content: [{ type: "text" as const, text: "No active chapter." }], details: {} }
+      setChapterMeta(_projectDir, _chapterNum, kind, null)
+      const nextStep: ChapterStep = kind === "theory" ? "theory" : "prereq"
+      writeChapterState(_projectDir, _chapterNum, { step: nextStep })
+      const profile = readJson<UserProfile>(PROFILE_PATH)
+      const profileContext = [
+        `Stack: ${profile.primaryStack.join(", ") || "unknown"}`,
+        "Projects:",
+        ...profile.recentProjects.map(
+          (pr) => `  - ${pr.name}: ${pr.summary} [${pr.stack.join(", ")}]`
+        ),
+      ].join("\n")
+      const nextPrompt =
+        kind === "theory" ? theoryStepPrompt("familiar", _chapterNum) : prereqPrompt(profileContext)
+      return {
+        content: [{ type: "text" as const, text: `Classified: ${kind}.\n\n${nextPrompt}` }],
+        details: { kind },
+      }
+    },
+  })
+
   pi.registerTool({
     name: "poiesis_prereq_done",
     label: "Poiesis: Prereq Gate Done",
@@ -479,6 +518,7 @@ const extension = (pi: ExtensionAPI): void => {
 
   // ── session_before_compact: chapter-aware summary ──────────────────────────
   const STEP_NEXT: Record<ChapterStep, string> = {
+    classify: "call poiesis_chapter_classify",
     prereq: "call poiesis_prereq_done",
     theory: "finish quiz \u2192 call poiesis_theory_done",
     plan: "call poiesis_confirm_test_plan",

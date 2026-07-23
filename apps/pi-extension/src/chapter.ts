@@ -1,24 +1,16 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
-import { GoogleGenAI } from "@google/genai"
-import { setChapterMeta } from "./progress.ts"
 import { readProgress } from "./progress.ts"
 import {
+  classifyPrompt,
   implementPrompt,
   planPrompt,
   prereqPrompt,
   theoryPrompt as theoryStepPrompt,
   writeTestsPrompt,
 } from "./steps.ts"
-import type {
-  ChapterKind,
-  ChapterState,
-  ChapterStep,
-  RecentProject,
-  Roadmap,
-  UserProfile,
-} from "./types.ts"
+import type { ChapterKind, ChapterStep, RecentProject, Roadmap, UserProfile } from "./types.ts"
 import { exists, expandHome, readChapterState, writeChapterState } from "./utils.ts"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -35,47 +27,6 @@ const techstackFile = (projectDir: string): string => join(chaptersDir(projectDi
 
 const readFile = (path: string): string => readFileSync(path, "utf8")
 const writeFile = (path: string, content: string): void => writeFileSync(path, content, "utf8")
-
-// ── classifyChapter ───────────────────────────────────────────────────────────
-
-/**
- * One Gemini call — classifies a chapter as "code" | "theory".
- * ponytail: mixed removed — any chapter with runnable output is "code".
- */
-export const classifyChapter = async (
-  chapterMd: string,
-  primaryStack: string[]
-): Promise<ChapterKind> => {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set")
-
-  const ai = new GoogleGenAI({ apiKey })
-  const result = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: `Classify this tutorial chapter. Primary stack: ${primaryStack.join(", ")}.
-
-Reply with exactly one word: "code" or "theory".
-
-- "code": chapter involves writing runnable code — even if it also explains concepts
-- "theory": chapter is PURELY conceptual — no runnable output whatsoever
-
-Chapter content:
-${chapterMd}`,
-          },
-        ],
-      },
-    ],
-  })
-
-  const raw = (result.text ?? "").trim().toLowerCase()
-  if (raw === "theory") return "theory"
-  return "code" // ponytail: default — any ambiguity leans code; mixed → code
-}
 
 // ── TDD file operations ───────────────────────────────────────────────────────
 
@@ -424,38 +375,27 @@ export const runChapter = async (
 
   const existingState = readChapterState(projectDir, n)
 
-  // Fresh start: classify then write initial state
+  // Fresh start: let pi classify from the chapter markdown (already in system context).
+  // No pre-classification — the agent reads Current chapter content and calls
+  // poiesis_chapter_classify, which sets meta + routes to prereq/theory.
   if (!existingState) {
-    ctx.ui.setStatus("poiesis", ` Classifying chapter ${n}\u2026`)
-    let kind: ChapterKind = "code"
-    try {
-      kind = await classifyChapter(readFile(path), profile.primaryStack)
-    } catch {
-      // ponytail: fall back to 'code' if Gemini is unavailable
-    }
-    setChapterMeta(projectDir, n, kind, null)
-    ctx.ui.setStatus("poiesis", undefined)
-
-    const initialStep: ChapterStep = kind === "theory" ? "theory" : "prereq"
     writeChapterState(projectDir, n, {
-      step: initialStep,
+      step: "classify",
       prereqResult: null,
       testsFile: null,
       testsPlan: [],
       testsPass: false,
       startedAt: new Date().toISOString(),
     })
-
-    if (kind === "theory") {
-      pi.sendUserMessage(theoryStepPrompt("familiar", n))
-    } else {
-      pi.sendUserMessage(prereqPrompt(profileContext))
-    }
+    pi.sendUserMessage(classifyPrompt(n))
     return
   }
 
   // Resume: dispatch to the correct step
   switch (existingState.step) {
+    case "classify":
+      pi.sendUserMessage(classifyPrompt(n))
+      break
     case "prereq":
       pi.sendUserMessage(prereqPrompt(profileContext))
       break
@@ -510,6 +450,9 @@ if (process.argv[1]?.endsWith("chapter.ts")) {
       "1": { type: "code", testsFile: null, testsPass: false },
       "2": { type: "theory", testsFile: null, testsPass: null },
     })
+
+    // classifyChapter is gone — pi (the running agent) classifies via the
+    // poiesis_chapter_classify tool. Nothing to self-check here.
 
     // writeTddSection
     writeTddSection(dir, 1, "tests/chapter-1.test.ts", ["server returns 200", "unknown route 404"])
