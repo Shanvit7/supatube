@@ -3,9 +3,9 @@
   <h1 align="center">@shanvit7/poiesis</h1>
   <p align="center">
     <a href="https://www.npmjs.com/package/@shanvit7/poiesis"><img src="https://img.shields.io/npm/v/@shanvit7/poiesis?color=4f46e5&label=npm&style=flat-square" alt="npm version" /></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@shanvit7/poiesis?color=22c55e&style=flat-square" alt="License: MIT" /></a>
+    <a href="https://github.com/Shanvit7/poiesis/blob/main/apps/pi-extension/LICENSE"><img src="https://img.shields.io/npm/l/@shanvit7/poiesis?color=22c55e&style=flat-square" alt="License: MIT" /></a>
     <a href="https://github.com/Shanvit7/poiesis/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome" /></a>
-    <a href="https://pi.earendil.works"><img src="https://img.shields.io/badge/pi--package-%E2%9C%93-7c3aed?style=flat-square" alt="pi-package" /></a>
+    <a href="https://pi.dev"><img src="https://img.shields.io/badge/pi--package-%E2%9C%93-7c3aed?style=flat-square" alt="pi-package" /></a>
   </p>
 </p>
 
@@ -38,7 +38,7 @@ Pi reads the video, profiles your existing experience, and codes through it chap
 
 - **One command** — `/poiesis` does everything: onboard, scaffold, and run chapters
 - **Profile-aware** — scans your GitHub repos to calibrate depth, skips what you already know
-- **Gemini-powered analysis** — feeds the YouTube URL to Gemini, extracts chapters, tech stack, and concepts automatically
+- **Dual ingestion** — feeds the YouTube URL to Gemini for deep analysis when `GEMINI_API_KEY` is set; falls back to YouTube transcript extraction automatically when no key is available
 - **Strict TDD flow** — Pi writes the tests; you never write tests. Chapters cannot be marked done until tests are green
 - **Interactive test-plan review** — a full-screen TUI dialog lets you approve, add, or trim checkpoints before a single test is written
 - **Command review gate** — every shell command Pi wants to run is intercepted and shown to you first: run, steer, skip, or ask for an explanation
@@ -56,11 +56,15 @@ Pi reads the video, profiles your existing experience, and codes through it chap
 pi install npm:@shanvit7/poiesis
 ```
 
-Requires a free Gemini API key — get one at [aistudio.google.com](https://aistudio.google.com/app/apikey):
+A Gemini API key is **optional** — get one free at [aistudio.google.com](https://aistudio.google.com/app/apikey) for richer analysis:
 
 ```bash
-export GEMINI_API_KEY=your-key-here
+export GEMINI_API_KEY=your-key-here   # optional
 ```
+
+Without it, Poiesis falls back to YouTube transcript extraction, which works for any video that has captions.
+
+> **Free tier caveat:** The Gemini API free tier has no cost and no credit card requirement, but Google trains on your prompts. For private or sensitive codebases, upgrade to the paid tier or omit the key and use transcript extraction instead.
 
 ---
 
@@ -100,7 +104,7 @@ Profile is saved to `~/.poiesis/user-profile.json`.
 
 ### Project setup
 
-Paste a YouTube URL. Pi uses Gemini to analyze the video — chapters, tech stack, concepts, and key takeaways — then scaffolds a project directory:
+Paste a YouTube URL. Pi analyzes the video — chapters, tech stack, concepts, and key takeaways — then scaffolds a project directory. When `GEMINI_API_KEY` is set, Gemini watches the video directly; otherwise Pi extracts and analyzes the YouTube transcript (works for any captioned video):
 
 ```
 <project-name>/
@@ -228,7 +232,7 @@ The extension registers the following tools, which Pi calls internally during ch
 ## Prerequisites
 
 - `[pi](https://pi.earendil.works)` — the coding agent
-- `GEMINI_API_KEY` — free at [aistudio.google.com](https://aistudio.google.com/app/apikey)
+- `GEMINI_API_KEY` — optional; free tier available at [aistudio.google.com](https://aistudio.google.com/app/apikey) (no credit card, but Google trains on free-tier prompts). Without it, transcript extraction is used as a fallback.
 
 ---
 
@@ -300,4 +304,4 @@ All contributors are credited in the changelog.
 
 MIT © [shanvit7](https://github.com/shanvit7)
 
-See [LICENSE](./LICENSE) for the full text.
+See [LICENSE](https://github.com/Shanvit7/poiesis/blob/main/apps/pi-extension/LICENSE) for the full text.
